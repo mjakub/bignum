@@ -16,7 +16,12 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
-
+pch.*
+.vs
+ARM
+Debug
+x64
+Generated Files
 # =========================
 # Operating System Files
 # =========================
