@@ -601,7 +601,7 @@ namespace Big_numbers {
 
 
 
-  vec32 mul_vec_by_word(const std::vector<uint32_t>& a, const uint32_t b)
+  vec32 mul_vec32_by_word(const std::vector<uint32_t>& a, const uint32_t b)
   {
     vec32 result;
 
@@ -652,10 +652,10 @@ namespace Big_numbers {
   {
 #ifdef _DEBUG
     vec32 test_rem(r);
-    const vec32 product = mul_vec_by_word(d, q);
+    const vec32 product = mul_vec32_by_word(d, q);
     decrement_at_index(test_rem, index_of_work, product);  // decrement remainder by product at index
 #endif
-                                 // combine the functionality of mul_vec_by_word and  decrement_at_index.
+                                 // combine the functionality of mul_vec32_by_word and  decrement_at_index.
                                  // as each word is computed by mult_by_word, take that word and subtract it at the index.
     if (0 == q)
     {
@@ -753,7 +753,7 @@ namespace Big_numbers {
 
     if (1u == a.size())
     {
-      result = mul_vec_by_word(b, a[0]);
+      result = mul_vec32_by_word(b, a[0]);
       return result;
     }
 
@@ -862,8 +862,8 @@ namespace Big_numbers {
 
     if (1u == a.size())
     {
-      result = mul_vec_by_word(b, a[0]);
-      //std::cout << "mul_ordered result of mul_vec_by_word=" << result << std::endl;
+      result = mul_vec32_by_word(b, a[0]);
+      //std::cout << "mul_ordered result of mul_vec32_by_word=" << result << std::endl;
 
 #ifdef _DEBUG
       assert((0 == result.size()) || (result.back() != 0));  // unless n is zero, the MSW is nonzero 
@@ -944,7 +944,7 @@ namespace Big_numbers {
     return result;
   }  // end mul_ordered
 
-  vec32 mul_vec32(const vec32& a, const vec32& b)
+  std::vector<uint32_t> mul_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b)
   {
     return a.size() < b.size()
       ? mul_ordered(a, b)
@@ -1021,7 +1021,7 @@ namespace Big_numbers {
     {
       q.pop_back();
     }
-    vec32 prod = mul_vec_by_word(q, divisor);
+    vec32 prod = mul_vec32_by_word(q, divisor);
 
     vec32 sum = add_word(prod, remainder);
     const bool return_val(sum == numerator);
@@ -1137,7 +1137,7 @@ namespace Big_numbers {
 
   // div, divide n by d, returning a quotient and a remainder
   // satisfies n = quot * d + rem,   where rem < d, unless d==0, in which case rem=d=0
-  std::pair< vec32, vec32 > div(const vec32& n, const vec32& d)
+  std::pair< vec32, vec32 > div_vec32(const vec32& n, const vec32& d)
   {
     std::pair<vec32, vec32> result;
     const bool is_zero_quotient = less_than(n, d);
@@ -1261,7 +1261,7 @@ namespace Big_numbers {
 
           // ret_remainder -= word_shift( d*high_quotw, index_of_work)
           sub_product_at_index(ret_remainder, index_of_work, d, quot_w);
-          //const vec32 product = mul_vec_by_word(d, quot_w);
+          //const vec32 product = mul_vec32_by_word(d, quot_w);
           //decrement_at_index(ret_remainder, index_of_work, product);  // decrement remainder by product at index
 
           increment_at_index_by_word(ret_quotient, index_of_work, quot_w);  // increase the (quotient*d) value
@@ -1290,7 +1290,7 @@ namespace Big_numbers {
 
           // ret_remainder -= word_shift( d*high_quotw, index_of_work)
           sub_product_at_index(ret_remainder, index_of_work, d, high_quotw);
-          //const vec32 product = mul_vec_by_word(d, high_quotw);
+          //const vec32 product = mul_vec32_by_word(d, high_quotw);
           //decrement_at_index(ret_remainder, index_of_work, product);  // decrement remainder by product at index
           increment_at_index_by_word(ret_quotient, index_of_work, high_quotw);  // increase the (quotient*d) value
 #ifdef _DEBUG
@@ -1375,7 +1375,7 @@ namespace Big_numbers {
       const std::pair< vec32, uint32_t > temp = div(n.num.d, d.num.d[0]);
       return std::pair <Nat, Nat>(std::move(temp.first), temp.second);
     }
-    const std::pair< vec32, vec32 > temp = div(n.num.d, d.num.d);
+    const std::pair< vec32, vec32 > temp = div_vec32(n.num.d, d.num.d);
     return std::pair<Nat, Nat>(std::move(temp.first), std::move(temp.second));
   }
 

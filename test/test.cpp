@@ -63,7 +63,7 @@ static vec32 make_random_nonzero_vnat_of_size(size_t maxsize, std::minstd_rand0&
   return rnat;
 }
 
-// precondtion v.size() != 0
+// precondition v.size() != 0
 static vec32 make_random_nonzero_vnat_le(const vec32& v, std::minstd_rand0& generator)
 {
   const size_t v_size(v.size());
@@ -138,28 +138,6 @@ static uint32_t get_MSW_mask(uint32_t b)
 }
 
 
-
-static BNat make_random_nonzero_vnat_with_mask(std::minstd_rand0& generator, uint64_t mask)
-{
-  size_t size = (mask & generator());
-  if (size == 0u)
-  {
-    size = 1u;
-  }
-  vec32 rnat;
-  rnat.reserve(size);
-
-  for (unsigned i(0); i < size; ++i)
-  {
-    unsigned r = generator();
-    rnat.push_back(r & 0xFFFF'FFFFu);
-  }
-  if (0u == rnat.back())
-  {
-    rnat.back() = 1u;
-  }
-  return BNat(rnat);
-}
 
 // mul_using_generator(), multiplies two vectors using a product generator.
 // for testing Product_generator.
@@ -904,50 +882,6 @@ int main()
     std::cout << "elapsed seconds:" << seconds << std::endl;
   }
 
-  {
-    const std::string test_name("multiply_by_word_fuzz_test");
-    // multiply psuedo-random numbers.
-    // compare fast-cache to convultion multiply for consistency.
-    // later do same test to compare times.
-    bool success(true);
-    std::minstd_rand0 generator(seed1);
-    //generator.seed(seed1);
-
-    for (unsigned i(0); i < 100; ++i)
-    {
-      uint32_t  b = (generator() & 0xFFFF'FFFFu);
-      vec32 a = make_random_vnat_of_size(255u, generator);
-
-      vec32 result1 = Big_numbers::mul_vec_by_word(a, b);
-
-
-      //vec32 result3 = mul_by_word_using_iterator(a, b);
-      vec32 result3 = mul_word_to_vector_using_generator(a.cbegin(), a.cend(), b);
-
-      if (result1 != result3)
-      {
-        success = false;
-        std::cout << "fail of " << test_name.c_str() << " fuzz index=" << i << " , gen.mul(a,b) != mul_vec_by_word(a,b),  result sizes=" << result1.size() << ", " << result3.size() << std::endl;
-        std::cout << "\nresult1= " << result1 << std::endl;
-        std::cout << "\nresult3= " << result3 << std::endl;
-        return -1;
-      }
-
-    }
-    if (success)
-    {
-      ++num_passed;
-      //BNat n(accumulator);
-      //std::cout << "number=" << n << std::endl;
-      std::cout << "passed test " << test_name.c_str() << std::endl;
-    }
-    else
-    {
-      ++num_failed;
-      std::cout << "failed test " << test_name.c_str() << std::endl;
-    }
-  }
-
 
   {
     const std::string test_name("multiply_fuzz_test");
@@ -990,20 +924,6 @@ int main()
         return -1;
       }
     }  // end for
-#if 0
-      Big_numbers::Prod_generator gen(a, b);
-      vec32 result3 = gen.mul();
-      if (result1 != result3)
-      {
-        success = false;
-        std::cout << "fail of " << test_name.c_str()
-          << " fuzz index=" << i
-          << " , mul_old_fashioned != mul_cov,  result sizes=" << result1.size() << ", " << result3.size() << std::endl;
-        std::cout << "\nresult1= " << result1 << std::endl;
-        std::cout << "\nresult3= " << result3 << std::endl;
-        return -1;
-      }
-#endif
 
     if (success)
     {
@@ -1059,7 +979,6 @@ int main()
       BNat n = (q*d) + r;
 
       auto result = div(n, d);
-      BNat expected_remain = r;
 
       if (result.second != r)
       {
@@ -1093,52 +1012,6 @@ int main()
     }
   }
 
-
-  {
-    const std::string test_name("conv_mul_performance_fuzz_test");
-    // multiply psuedo-random numbers.
-    // compare fast-cache to convolution multiply for consistency.
-    // later do same test to compare times.
-    bool success(true);
-    uint32_t parity(0);
-
-    std::minstd_rand0 generator(seed1);
-
-    myclock::time_point start2 = myclock::now();
-#ifdef _DEBUG
-    const size_t max_size(15u);
-    const unsigned int num_iters(100u);
-#else
-    const size_t max_size(0x10000u);
-    const unsigned int num_iters(10u);
-#endif
-    vec32 a; a.reserve(max_size);  // up to 64K in size
-    vec32 b; b.reserve(max_size);
-
-    for (unsigned i(0); i < num_iters; ++i)
-    {
-#ifndef _DEBUG
-      std::cout << test_name.c_str() << " test index " << i << " of " << num_iters << std::endl;
-#endif
-      a = make_random_vnat_of_size(max_size, generator);
-      b = make_random_vnat_of_size(max_size, generator);
-
-      //std::cout << "mul" << i << std::endl;
-      vec32 result1 = Big_numbers::mul_vec32(a, b);
-      if (result1.size() != 0u)
-      {
-        parity = parity ^ result1[0];
-      }
-    }
-    myclock::time_point end2 = myclock::now();
-    std::chrono::duration<double> time_span2 =
-      std::chrono::duration_cast<std::chrono::duration<double>>(end2 - start2);
-
-    std::cout << "parity=" << std::hex << parity << std::dec;
-    std::cout << " elapsed seconds for mul=" << time_span2.count() << std::endl;
-    ++num_passed;
-    std::cout << "passed test " << test_name.c_str() << std::endl;
-  }
 
 
 
