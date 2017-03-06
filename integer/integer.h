@@ -18,14 +18,20 @@ namespace Big_numbers {
   bool test_nonzero(const std::vector<uint32_t>& n) noexcept;
   bool test_zero(const std::vector<uint32_t>& n) noexcept;
   bool less_than(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) noexcept;
+  bool greater_than(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) noexcept;
 
   std::vector<uint32_t> add_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
+  std::vector<uint32_t> add_vec32_and_word(const std::vector<uint32_t>& n, const uint32_t delta);
+  void increment_by_word(std::vector<uint32_t>& n, const uint32_t delta);
+
+
+  std::pair< std::vector<uint32_t>, bool> sym_diff_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
+
   std::vector<uint32_t> mul_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
 
   // div takes a numerator n and a divisor d, returns a pair (quotient, remainder).
   std::pair< std::vector<uint32_t>, std::vector<uint32_t> > div_vec32(const std::vector<uint32_t>& n, const std::vector<uint32_t>& d);
-  std::vector<uint32_t> add_word(const std::vector<uint32_t>& n, const uint32_t delta);
-  void increment_by_word(std::vector<uint32_t>& n, const uint32_t delta);
+
 
   std::vector<uint32_t> mul_vec32_by_word(const std::vector<uint32_t>& a, const uint32_t b);
 

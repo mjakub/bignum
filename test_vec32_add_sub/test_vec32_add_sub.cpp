@@ -41,83 +41,6 @@ static vec32 make_random_vnat_of_size(size_t maxsize, std::minstd_rand0& generat
   return rnat;
 }
 
-static vec32 make_random_nonzero_vnat_of_size(size_t maxsize, std::minstd_rand0& generator)
-{
-  vec32 rnat;
-  std::uniform_int_distribution<uint32_t> dist32(0, 0xffffffffu);
-  std::uniform_int_distribution<size_t> dist(1, maxsize);
-  size_t size = dist(generator);
-  if (size == 0)
-  {
-    return rnat;
-  }
-  rnat.reserve(size);
-  for (size_t i(0); i < size; ++i)
-  {
-    rnat.push_back(dist32(generator));
-  }
-  if ((0 != rnat.size()) && (0u == rnat.back()))
-  {
-    rnat.back() = 1u;
-  }
-  return rnat;
-}
-
-// precondition v.size() != 0
-static vec32 make_random_nonzero_vnat_le(const vec32& v, std::minstd_rand0& generator)
-{
-  const size_t v_size(v.size());
-#ifdef _DEBUG
-  if (v_size == 0)
-  {
-    std::cerr << "make_random_nonzero_vnat_le: precondition violated, v.size == 0" << std::endl;
-    exit(-1);
-  }
-#endif
-
-  std::uniform_int_distribution<size_t> dist(1, v.size());
-  size_t rnat_size = dist(generator);
-  vec32 rnat(vec32(rnat_size, 0)); // zeros in rnat, to place MSWs (instead of pushing LSWs)
-
-  if (v_size == 1u)
-  {
-    std::uniform_int_distribution<uint32_t> dist1v(1u, v[0]);
-    rnat[0] = dist1v(generator);
-  }
-
-  std::uniform_int_distribution<uint32_t> dist32(0, 0xffffffffu);
-  bool equal_so_far(true);
-  for (size_t i(0); i < rnat_size; ++i)
-  {
-    const size_t index = rnat_size - (i + 1);
-    const uint32_t vword = v[index];
-    if (equal_so_far)
-    {
-      std::uniform_int_distribution<uint32_t> distsmall(0, vword);
-      const uint32_t word = distsmall(generator);
-      rnat[index] = word;
-      equal_so_far &= (word == vword);
-    }
-    else
-    {
-      rnat[index] = dist32(generator);
-    }
-  }
-
-  while ((rnat.size() != 0u) && (rnat.back() == 0))
-  {
-    rnat.pop_back();
-  }
-  if (rnat.size() == 0u)
-  {
-    // happened to choose the number zero, which is not supposed to be returned
-    // since size of v is >1, any nonzero word will do
-    std::uniform_int_distribution<uint32_t> dist1(1u, 0xffff'ffffu);
-    rnat[0] = dist1(generator);
-  }
-
-  return rnat;
-}
 
 int main()
 {
@@ -146,6 +69,8 @@ int main()
       (not Big_numbers::less_than(vw2, vw1)) &&
       (vw3 == vw2) &&
       Big_numbers::less_than(vw0, vw1) &&
+      Big_numbers::greater_than(vw1,vw0) &&
+      (not Big_numbers::greater_than(vw0,vw1)) &&
       Big_numbers::test_zero(zero) &&
       (not Big_numbers::test_zero(vw0)))
     {
@@ -193,7 +118,7 @@ int main()
       vec32 vw0 = {};
       uint32_t addend = 0x0u;
       vec32 expected = {};  // the 1u is the carry into MSB
-      std::vector<uint32_t> result = Big_numbers::add_word(vw0, addend);
+      std::vector<uint32_t> result = Big_numbers::add_vec32_and_word(vw0, addend);
       if (result != expected)
       {
         ++num_failed_local;
@@ -207,7 +132,7 @@ int main()
       vec32 vw0 = {}; // 2 more till rollover
       uint32_t addend = 0xffffffffu;
       vec32 expected = { addend };  // the 1u is the carry into MSB
-      std::vector<uint32_t> result = Big_numbers::add_word(vw0, addend);
+      std::vector<uint32_t> result = Big_numbers::add_vec32_and_word(vw0, addend);
       if (result != expected)
       {
         ++num_failed_local;
@@ -220,7 +145,7 @@ int main()
       vec32 vw0 = { 0xffffffff }; // 2 more till rollover
       uint32_t addend = 0x3u;
       vec32 expected = { 0x2u, 0x1u };  // the 1u is the carry into MSB
-      std::vector<uint32_t> result = Big_numbers::add_word(vw0, addend);
+      std::vector<uint32_t> result = Big_numbers::add_vec32_and_word(vw0, addend);
       if (result != expected)
       {
         ++num_failed_local;
@@ -235,7 +160,7 @@ int main()
       uint32_t addend = 0x33u;
       vec32 expected = { 0x31u, 0x1u };  // the 1u is the carry into MSB
 
-      std::vector<uint32_t> result = Big_numbers::add_word(vw1, addend);
+      std::vector<uint32_t> result = Big_numbers::add_vec32_and_word(vw1, addend);
       if (result != expected)
       {
         ++num_failed_local;
@@ -251,7 +176,7 @@ int main()
       uint32_t addend = 0x33u;
       vec32 expected = { 0x32u, 0x0u, 0x1u };  // the 1u is the carry into MSB
 
-      std::vector<uint32_t> result = Big_numbers::add_word(vw1, addend);
+      std::vector<uint32_t> result = Big_numbers::add_vec32_and_word(vw1, addend);
       if (result != expected)
       {
         ++num_failed_local;
@@ -266,7 +191,7 @@ int main()
       uint32_t addend = 0x33u;
       vec32 expected = { 0x32u, 0x3u };  // the 1u is the carry into MSB
 
-      std::vector<uint32_t> result = Big_numbers::add_word(vw1, addend);
+      std::vector<uint32_t> result = Big_numbers::add_vec32_and_word(vw1, addend);
       if (result != expected)
       {
         ++num_failed_local;
@@ -281,7 +206,7 @@ int main()
       uint32_t addend = 0x33u;
       vec32 expected = { 0x31u, 0, 0x3u };  // the 1u is the carry into MSB
 
-      std::vector<uint32_t> result = Big_numbers::add_word(vw1, addend);
+      std::vector<uint32_t> result = Big_numbers::add_vec32_and_word(vw1, addend);
       if (result != expected)
       {
         ++num_failed;
@@ -296,7 +221,7 @@ int main()
       uint32_t addend = 0x1u;
       vec32 expected = { 0x0u, 0x0u, 0x1u };  // the 1u is the carry into MSB
 
-      std::vector<uint32_t> result = Big_numbers::add_word(vw1, addend);
+      std::vector<uint32_t> result = Big_numbers::add_vec32_and_word(vw1, addend);
       if (result != expected)
       {
         ++num_failed_local;
@@ -336,6 +261,68 @@ int main()
       std::cout << "failed test " << test_name.c_str() << std::endl;
     }
   }
+
+
+
+  {
+    const std::string test_name("sym_diff");
+    vec32 vw1 = { 0x44u };
+    vec32 vw2 = { 0x33u };
+    vec32 expected_value = { 0x11u};  // the 1u is the carry into MSB
+   
+    auto result = Big_numbers::sym_diff_vec32(vw1, vw2);
+    bool success = (result.first == expected_value) && result.second;
+    if (not success)
+    {
+      ++num_failed;
+      std::cout << "failed test " << test_name.c_str() << " part 1" << std::endl;
+    }
+
+    if (success)
+    {
+      vec32 expected_value = { 0x11u };  // the 1u is the carry into MSB
+      auto result2 = Big_numbers::sym_diff_vec32(vw2, vw1);
+      success = (result2.first == expected_value) && (not result2.second);
+      if (not success)
+      {
+        ++num_failed;
+        std::cout << "failed test " << test_name.c_str() << " part 2" << std::endl;
+      }
+    }
+
+    if (success)
+    {
+      vec32 v1 = { 0xFFFF'FFFF,0x44u };
+      vec32 v2 = { 0x22u };
+      vec32 expected_value3 = { 0xFFFF'FFDD, 0x44u };  // the 1u is the carry into MSB
+    
+      auto result3 = Big_numbers::sym_diff_vec32(v2, v1);
+      success = (result3.first == expected_value3) && (not result3.second);
+      if (not success)
+      {
+        ++num_failed;
+        std::cout << "failed test " << test_name.c_str() << " part 3" << std::endl;
+      }
+      if (success)
+      {
+        auto result4 = Big_numbers::sym_diff_vec32(v1, v2);
+        success = (result4.first == expected_value3) && result4.second;
+        if (not success)
+        {
+          ++num_failed;
+          std::cout << "failed test " << test_name.c_str() << " part 4" << std::endl;
+        }
+      }
+    }
+    if(success)
+    {
+      ++num_passed;
+      std::cout << "passed test " << test_name.c_str() << std::endl;
+    }
+  }
+
+
+
 
 
   std::cout << "passed " << num_passed << " tests" << std::endl;

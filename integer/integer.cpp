@@ -12,21 +12,7 @@ using Uint128 = std::pair<uint64_t, uint64_t>;  // least and most significant 64
 
 namespace Big_numbers {
   // helper functions
-#if 0
-  void shift_right_32(Uint128& accum)
-  {
-    accum.first = (accum.first >> 32u) + ((accum.second & 0xFFFF'FFFFu) << 32u);
-    accum.second >>= 32u;
-  }
-#endif
 
-  constexpr Uint128 shr_32(const Uint128 accum) noexcept
-  {
-    return Uint128(
-      (accum.first >> 32u) + ((accum.second & 0xFFFF'FFFFu) << 32u),
-      (accum.second >> 32u)
-    );
-  }
 
   bool test_nonzero(const std::vector<uint32_t>& n) noexcept
   {
@@ -58,22 +44,59 @@ namespace Big_numbers {
     auto riter = std::crbegin(rhs);
     auto rend = std::crend(rhs);
     auto iter = std::crbegin(lhs);
+
     while (riter != rend)
     {
-      if (*riter == *iter)
+      const auto lhs_value = *iter;
+      const auto rhs_value = *riter;
+      if (rhs_value != lhs_value)
       {
-        ++iter;
-        ++riter;
-        continue;  // advance to next words
+        is_less = (lhs_value < rhs_value);
+        break;
       }
-
-      is_less = (*iter < *riter);
-      break;
+      ++riter;
+      ++iter;
     }
     return is_less;
   }
 
-  vec32 add_word(const vec32& n, const uint32_t delta)
+  bool greater_than(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) noexcept
+  {
+    bool is_greater(false);
+    const size_t lsize = lhs.size();
+    const size_t rsize = rhs.size();
+    if (lsize > rsize)
+    {
+      is_greater = true;
+      return is_greater;
+    }
+    if (lsize < rsize)
+    {
+      return is_greater; // false
+    }
+
+    // OK, same size,  do a reverse-iteration
+    // so that MSW are considered first.
+    auto riter = std::crbegin(rhs);
+    auto rend = std::crend(rhs);
+    auto iter = std::crbegin(lhs);
+
+    while (riter != rend)
+    {
+      const auto lhs_value = *iter;
+      const auto rhs_value = *riter;
+      if (rhs_value != lhs_value)
+      {
+        is_greater = (lhs_value > rhs_value);
+        break;
+      }
+      ++riter;
+      ++iter;
+    }
+    return is_greater;
+  }
+
+  std::vector<uint32_t> add_vec32_and_word(const std::vector<uint32_t>& n, const uint32_t delta)
   {
     vec32 result;
     if (delta == 0)
@@ -118,6 +141,59 @@ namespace Big_numbers {
         n.push_back(carry);  // carry goes into a new word
       }
     }
+  }
+
+  std::pair< std::vector<uint32_t>, bool> sym_diff_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b)
+  {
+    std::pair< std::vector<uint32_t>, bool> result;
+    result.second = true;  // a>=b
+    const auto asize = a.size();
+    const auto bsize = b.size();
+    if (asize > bsize)
+    {
+      result.first.reserve(asize);
+      arithmetic_algorithm::subtract_unsafe(a.begin(), a.end(), b.begin(), b.end(), result.first);
+      return result;
+    }
+    if (asize < bsize)
+    {
+      result.second = false;
+      result.first.reserve(bsize);
+      arithmetic_algorithm::subtract_unsafe(b.begin(), b.end(), a.begin(), a.end(), result.first);
+      return result;
+    }
+
+    // a and b have aame size.
+    // scan from MSW to least, to find where they first differ.
+    // once it is known which is greater, call subtract_unsafe on the parts that differ.
+    auto rbiter = std::crbegin(b);
+    auto rbend = std::crend(b);
+    auto raiter = std::crbegin(a);
+    bool is_greater(false);
+    while (rbiter != rbend)
+    {
+      const auto a_value = *raiter;
+      const auto b_value = *rbiter;
+      if (b_value != a_value)
+      {
+        is_greater = (a_value > b_value);
+        break;
+      }
+      ++raiter;
+      ++rbiter;
+    }
+    // Note: the base() function returns the forward iterator correponding to a reverse_iterator.
+    if (is_greater)
+    {
+      result.first.reserve(asize);
+      arithmetic_algorithm::subtract_unsafe(a.begin(), raiter.base(), b.begin(), rbiter.base(), result.first);
+    }
+    else
+    {
+      result.second = false;
+      arithmetic_algorithm::subtract_unsafe(b.begin(), rbiter.base(), a.begin(), raiter.base(), result.first);
+    }
+    return result;
   }
 
   void increment_at_index_by_word(std::vector<uint32_t>& n, const size_t index, const uint32_t delta)
@@ -333,137 +409,15 @@ namespace Big_numbers {
     return is_greater;
   }
 
-  bool greater_than(const vec32& lhs, const vec32& rhs) noexcept
+  constexpr Uint128 shr_32(const Uint128 accum) noexcept
   {
-    bool is_greater(false);
-    const size_t lsize = lhs.size();
-    const size_t rsize = rhs.size();
-    if (lsize > rsize)
-    {
-      is_greater = true;
-      return is_greater;
-    }
-    if (lsize < rsize)
-    {
-      return is_greater; // false
-    }
-
-    // OK, same size,  do a reverse-iteration
-    // so that MSW are considered first.
-    auto riter = std::crbegin(rhs);
-    auto rend = std::crend(rhs);
-    auto iter = std::crbegin(lhs);
-
-    while (riter != rend)
-    {
-      if (*riter == *iter)
-      {
-        ++riter;
-        ++iter;
-        continue;
-      }
-
-      is_greater = (*iter > *riter);
-      break;
-    }
-    return is_greater;
+    return Uint128(
+      (accum.first >> 32u) + ((accum.second & 0xFFFF'FFFFu) << 32u),
+      (accum.second >> 32u)
+    );
   }
 
-#if 0
-  bool twice_greater(const vec32& lhs, const vec32& rhs)  //  returns 2*lhs > rhs
-  {
-    bool is_greater(false); // RVO
 
-    const size_t lsize = lhs.size();
-    const size_t rsize = rhs.size();
-
-    // lsize > rsize => lhs > rhs  => 2*lhs > rhs
-    if (lsize > rsize)
-    {
-      is_greater = true;
-      return is_greater;
-    }
-    // lsize < (rsize - 1u) => lhs < 2**32 * rhs => lhs < rhs
-    if (lsize < (rsize - 1u))
-    {
-      return is_greater; // false
-    }
-    if ((lsize == (rsize - 1)) && (rhs.back() > 1u))
-    {
-      return is_greater; // false
-    }
-
-
-    // remaining possibilities: 
-    // lsize = rsize  (both vectors same length)
-    // lsize = rsize-1 and rhs MSW is 1
-
-    // in first case, the MSW of 2*lhs = shift left each word of lhs, shifting in MSbit from the next least-significant word
-    // in second case, shift right each word of lhs, shifting in LSbit from the next most-significant word.
-    auto riter = std::crbegin(rhs);
-    auto rend = std::crend(rhs);
-    auto liter = std::crbegin(lhs);
-    auto lend = std::crend(lhs);
-    if (lsize == rsize)
-    {
-      if ((lhs.back() & 0x8000'0000) != 0u)  // twice lhs will have a size > rsize, so 2*lhs > rhs.
-      {
-        is_greater = true;
-        return is_greater;
-      }
-    }
-    else
-    {
-      // lsize = rsize-1 and rhs MSW is 1
-      if (0 == (lhs.back() & 0x8000'0000))
-      {
-        return is_greater;  // 2*lhs has size less than rsize, so 2*lhs < rhs   
-      }
-      // can start scan at next word of rhs, since 2*lhs and rhs both have MSW=1.
-      ++riter;
-    }
-    while (riter != rend)
-    {
-      uint32_t previous_word(0);
-      if ((liter + 1u) != lend)
-      {
-        previous_word = *(liter + 1u);
-      }
-      uint32_t current_word = (*liter) & 0x7fff'ffff;
-      uint32_t twicelhs_word = (current_word << 1u) + (previous_word >> 31u);
-      if (*riter == twicelhs_word)
-      {
-        ++riter;
-        ++liter;
-      }
-      else
-      {
-        is_greater = (twicelhs_word > *riter);
-        break;
-      }
-    }
-
-    return is_greater;
-  }
-#endif
-
-#if 0
-  // precondition:   not less_than_at_index(v, index, delta)
-  // also, does not normalize v after subtracting
-  static void decrement_at_index_by_word(vec32& v, size_t index, uint32_t delta)
-  {
-    // subtract a word at a time, checking for borrow
-    const size_t vsize = v.size();
-
-    for (size_t i(index); (i < vsize) && (delta != 0); ++i)
-    {
-      const uint32_t prev = v[i];
-      const uint32_t newv = prev - delta;
-      v[i] = newv;
-      delta = (newv > prev);  // check for underflow
-    }
-  }
-#endif
 
 
   static void decrement_by_word(vec32& v, uint32_t delta)
@@ -799,27 +753,6 @@ namespace Big_numbers {
       : mul_ordered_old_fashioned(b, a);
   }
 
-#if 0
-  // Takes dot product [a[start]*b[k-start] + a[start+1]*b[k-start-1] + ... a[end-1]*b[k-start-(end-1)]
-  // and stores it into a 128-bit accumulator.
-  // So ap can be a pointer to a[start], bp can be a pointer to b[k-start], n=end-start, and dot with ++a --b for end-start iterations
-  Uint128 convolve2c(vec32::const_iterator ap, vec32::const_iterator aend, vec32::const_iterator bp, const Uint128 accum) noexcept
-  {
-    Uint128 acc = accum;
-    while (ap != aend)
-    {
-      // add prod and acc, careful to detect carries
-      const uint64_t sum = acc.first + (uint64_t(*ap) * uint64_t(*bp));
-      //std::cout << "convolve2c sum " << acc.first << " + "  << (*ap) << " * " << (*bp) << " = " << sum << std::endl;
-      acc.second += (sum < acc.first);  // add 1 if overflow
-      acc.first = sum;
-      ++ap;
-      --bp;
-    }
-    return acc;
-  }
-#endif
-
 
   auto sum_for_conv = [](const Uint128 accum, const uint64_t right) noexcept -> Uint128
   {
@@ -1023,7 +956,7 @@ namespace Big_numbers {
     }
     vec32 prod = mul_vec32_by_word(q, divisor);
 
-    vec32 sum = add_word(prod, remainder);
+    vec32 sum = add_vec32_and_word(prod, remainder);
     const bool return_val(sum == numerator);
     return return_val;
   }
@@ -1137,7 +1070,7 @@ namespace Big_numbers {
 
   // div, divide n by d, returning a quotient and a remainder
   // satisfies n = quot * d + rem,   where rem < d, unless d==0, in which case rem=d=0
-  std::pair< vec32, vec32 > div_vec32(const vec32& n, const vec32& d)
+  std::pair< std::vector<uint32_t>, std::vector<uint32_t> > div_vec32(const std::vector<uint32_t>& n, const std::vector<uint32_t>& d)
   {
     std::pair<vec32, vec32> result;
     const bool is_zero_quotient = less_than(n, d);

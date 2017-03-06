@@ -15,6 +15,29 @@ Output is either 1-word (in the case of generators) or directed by an output ite
 
 namespace arithmetic_algorithm {
 
+  //precondition: a >= b, as numbers.  Hence the "unsafe" part.
+  template <class Fwd_itera, class Fwd_iterb, class Out_container>
+  void subtract_unsafe(Fwd_itera aiter, Fwd_itera aend, Fwd_iterb biter, Fwd_iterb bend, Out_container& out)
+  {
+    // grade-school subtaction, with borrows
+    bool borrow(false);
+    while (aiter != aend)
+    {
+      Fwd_itera::value_type aval = *aiter;
+      Fwd_iterb::value_type bval = (biter== bend) ? Fwd_iterb::value_type(0u) : *biter;
+      Fwd_itera::value_type diff1 = aval - bval;
+      Fwd_itera::value_type diff2 = diff1 - borrow;
+      borrow = (diff1 > aval) || (diff2 > diff1);
+      if (biter != bend)
+      {
+        ++biter;
+      }
+      out.push_back(diff2);
+      ++aiter;
+    }
+  }
+
+
   // Sum_generator(abegin, aend, bbegin, bend, bool carry_in)
   // represents sum from adding the range bbegin..bend into abegin..aend
   //
