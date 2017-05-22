@@ -9,10 +9,10 @@
 #include <random>
 #include <algorithm>
 #include <iso646.h>   // so "not" 'or" and "and" work, VSC++ bug
-
+#include <windows.h>  // for Sleep
 
 using BNat = Big_numbers::Nat;
-using BNat_mut = Big_numbers::Nat_mut;
+//using BNat_mut = Big_numbers::Nat_mut;
 using vec32 = std::vector<uint32_t>;
 
 static vec32 make_random_vnat_of_size(size_t maxsize, std::minstd_rand0& generator)
@@ -265,12 +265,12 @@ int main()
 
 
   {
-    const std::string test_name("sym_diff");
+    const std::string test_name("symdiff");
     vec32 vw1 = { 0x44u };
     vec32 vw2 = { 0x33u };
     vec32 expected_value = { 0x11u};  // the 1u is the carry into MSB
    
-    auto result = Big_numbers::sym_diff_vec32(vw1, vw2);
+    auto result = Big_numbers::symdiff_vec32(vw1, vw2);
     bool success = (result.first == expected_value) && result.second;
     if (not success)
     {
@@ -281,7 +281,7 @@ int main()
     if (success)
     {
       vec32 expected_value = { 0x11u };  // the 1u is the carry into MSB
-      auto result2 = Big_numbers::sym_diff_vec32(vw2, vw1);
+      auto result2 = Big_numbers::symdiff_vec32(vw2, vw1);
       success = (result2.first == expected_value) && (not result2.second);
       if (not success)
       {
@@ -296,7 +296,7 @@ int main()
       vec32 v2 = { 0x22u };
       vec32 expected_value3 = { 0xFFFF'FFDD, 0x44u };  // the 1u is the carry into MSB
     
-      auto result3 = Big_numbers::sym_diff_vec32(v2, v1);
+      auto result3 = Big_numbers::symdiff_vec32(v2, v1);
       success = (result3.first == expected_value3) && (not result3.second);
       if (not success)
       {
@@ -305,7 +305,7 @@ int main()
       }
       if (success)
       {
-        auto result4 = Big_numbers::sym_diff_vec32(v1, v2);
+        auto result4 = Big_numbers::symdiff_vec32(v1, v2);
         success = (result4.first == expected_value3) && result4.second;
         if (not success)
         {
@@ -327,10 +327,6 @@ int main()
 
   std::cout << "passed " << num_passed << " tests" << std::endl;
   std::cout << "failed " << num_failed << " tests" << std::endl;
+  Sleep(5 * 1000);
   return num_failed;
 }
-
-//TODO test_add_word
-
-// TODO test_add  
-//std::vector<uint32_t> add_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>&b);

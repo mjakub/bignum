@@ -1,6 +1,6 @@
 ﻿#pragma once
-#ifndef BIG_NUMBERS_H
-#define BIG_NUMBERS_H
+#ifndef BIG_INTEGERS_H
+#define BIG_INTEGERS_H
 
 #include "arithmetic_algorithm.h"
 
@@ -20,12 +20,18 @@ namespace Big_numbers {
   bool less_than(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) noexcept;
   bool greater_than(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) noexcept;
 
+  inline bool less_than_or_equal(const std::vector<uint32_t>& lhs, const std::vector<uint32_t>& rhs) noexcept
+  {
+    return not greater_than(lhs, rhs);
+  }
+
   std::vector<uint32_t> add_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
   std::vector<uint32_t> add_vec32_and_word(const std::vector<uint32_t>& n, const uint32_t delta);
   void increment_by_word(std::vector<uint32_t>& n, const uint32_t delta);
 
-
-  std::pair< std::vector<uint32_t>, bool> sym_diff_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
+  // symmetric difference of two naturals (in vec32 format).
+  // The second value of the result has the value less_than_or_equal(a,b)
+  std::pair< std::vector<uint32_t>, bool> symdiff_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
 
   std::vector<uint32_t> mul_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b);
 
@@ -118,20 +124,46 @@ namespace Big_numbers {
 
     Integral_number() {}       // makes a nan
 
+    Integral_number(const Integral_number& rhs)
+      : d(rhs.d)
+      , negative(rhs.negative)
+      , infinite(rhs.infinite)
+      , NaN(rhs.NaN)
+    {}
+
+    Integral_number(Integral_number&& rhs)
+      : d(std::move(rhs.d))
+      , negative(rhs.negative)
+      , infinite(rhs.infinite)
+      , NaN(rhs.NaN)
+    {
+    }
+
     explicit Integral_number(const std::vector<uint32_t>& value)
-      : d(value) {}
+      : d(value)
+      , negative(false)
+      , infinite(false)
+      , NaN(false)
+    {}
 
     explicit Integral_number(const std::vector<uint32_t>&& value)
       : d(std::move(value))
+
+
     {
       //std::cout << "Integral_number move constructor called, size=" << d.size() << std::endl;
     }
 
     Integral_number(const std::vector<uint32_t>& value, const bool negate)
-      : d(value), negative(negate), infinite(false) {}
+      : d(value)
+      , negative(negate)
+      ,infinite(false)
+      ,NaN(false)
+    {}
 
     Integral_number(const std::vector<uint32_t>&& value, const bool negate)
       : d(value), negative(negate), infinite(false) {}
+
 
     explicit Integral_number(const uint32_t w)
     {
@@ -261,49 +293,9 @@ namespace Big_numbers {
   std::pair<Nat, uint32_t> div(const Nat& n, uint32_t d);
   std::pair<Nat, Nat> div(const Nat& n, const Nat& d);
 
-  struct Nat_mut {
-    Integral_number num;  // use this if you want to go low_level.
 
-                // make a natural number from a list from lsb to msb (msb pushed last).
-    explicit Nat_mut(const std::vector<uint32_t>& value)
-      : num(value) {}
-
-    explicit Nat_mut(const std::uint32_t w) : num(w) {}
-
-    bool operator == (const Nat_mut& rhs) const
-    {
-      return (rhs.num.d == num.d);
-    }
-    bool operator != (const Nat_mut& rhs) const
-    {
-      return (rhs.num.d != num.d);
-    }
-
-    bool operator < (const Nat_mut& rhs) const
-    {
-      return less_than(num.d, rhs.num.d);
-    }
-    bool operator > (const Nat_mut& rhs) const
-    {
-      return (rhs < *this);
-    }
-    bool operator <= (const Nat_mut& rhs) const
-    {
-      return (*this < rhs) || (*this == rhs);
-    }
-    bool operator >= (const Nat_mut& rhs) const
-    {
-      return (*this > rhs) || (*this == rhs);
-    }
-
-    // increment (in-place) by a value
-    void increment_by(const Nat_mut& rhs);
-    // multiply (in-place) by a value
-    void scale_by(const Nat_mut& rhs);
-
-  };  //end Nat_mut
-
-    // TODO make an Int_mut
+  // an Int is your classical negate(nonzeroNat) | zero | nonzeroNat
+  // no NaN or +inf or -inf
   struct Int {
 
     Int() : num(uint32_t(0)) {}
@@ -314,6 +306,8 @@ namespace Big_numbers {
     { }
     Int(const Int&& n) : num(n.num)
     { }
+
+    Int(const Nat&& nat) : num(std::move(nat.num)) {};
 
     // make a natural number from a list from lsb to msb (msb pushed last).
     explicit Int(const std::vector<uint32_t>& value, bool isNegative)

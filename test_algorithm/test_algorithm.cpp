@@ -10,9 +10,10 @@
 #include <random>
 #include <algorithm>
 #include <iso646.h>   // so "not" 'or" and "and" work, VSC++ bug
+#include <windows.h>  // for Sleep
 
 using BNat = Big_numbers::Nat;
-using BNat_mut = Big_numbers::Nat_mut;
+//using BNat_mut = Big_numbers::Nat_mut;
 using vec32 = std::vector<uint32_t>;
 
 static vec32 make_random_vnat_of_size(size_t maxsize, std::minstd_rand0& generator)
@@ -526,5 +527,6 @@ int main()
 
   std::cout << "passed " << num_passed << " tests" << std::endl;
   std::cout << "failed " << num_failed << " tests" << std::endl;
+  Sleep(5 * 1000);
   return num_failed;
 }

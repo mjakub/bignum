@@ -143,7 +143,7 @@ namespace Big_numbers {
     }
   }
 
-  std::pair< std::vector<uint32_t>, bool> sym_diff_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b)
+  std::pair< std::vector<uint32_t>, bool> symdiff_vec32(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b)
   {
     std::pair< std::vector<uint32_t>, bool> result;
     result.second = true;  // a>=b
@@ -897,43 +897,43 @@ namespace Big_numbers {
     // TBD write Karatsuba algorithm
     // A = a0  + a1 << N    (this is a word shift)
     // B = b0  + b1 << M
-    // A*B = a0*b0                             // t0
-    //     + (a0 * b1)<<M + (a1*b0)<<N       // t1
-    //     + a1*b1 << (N+M)                  // t2
+    // A*B = a0*b0   
+    //     + (a0 * b1)<<M + (a1*b0)<<N
+    //     + a1*b1 << (N+M)      
+    // choose N=M
+    //     = t0 + t1<<N + t2 <<2N
+    //where 
+    //   t0 = a0*b0
+    //   t1 = a0*b1+a1*b0 = t0+t2-(a0-a1)*(b0-b1) 
+    //   t2 = a1*b1
     //
-    // the plan is to choose N and M to be equal, 
-    // because in that case
-    // t1= (a0*b1 + a1*b0) << N
-    //   = t0 + t2 - (a0-a1)*(b0-b1)<<N which is just one multiply
+    // So can use only 3 recursive multiplies (vs 4 normally)
     //
-    // if A.size and B.size are both odd or both even,
-    // then A.size == B.size
-    // let N=M=floor(A.size/2)
-    //
-    // if A.size is even, and B.size odd = a.size+1
-    // let N=M=floor(A.size/2);
-    //
-    // if A.size is odd and B.size is even
-    // let N=M=ceil(A.size/2);
+    // memory layout for result, do in-place
+    //         N words  N words  N words N words
+    // step 1  (a0-a1)                   (b0-b1)
+    // step 2  (a0-a1) (a0-a1)*(b0-b1)   0
+    // step 3  t0L     +=t0L             0
+    // step 4          +=t0U    +=t0U    0+
+    // step 5          +=t2L    +=t2L    0+
+    // step 6                   +=t2U    +=t2U
     // 
     //
-
-    // to do in place:
-    //
-    // 1.  allocate space for result (A.size + B.size) = 2N or 2N+1 if A.size != B.size. 
+    // 1.  allocate space for result (4N, assuming 2N = A.size())
     // 2.  figure the signs of a0-a1 and b0-b1
     //     store abs(a0-a1) in left N words of result, 
     //     store abs(b0-b1) in right N words of result (position 3N of result).
-    // 3.  store abs(a0-a1)*(b0-b1) starting at Nth word of result
+    // 3.  store abs(a0-a1)*abs(b0-b1) starting at Nth word of result
     //     use a recursive call to do the multiply
-    // 4.  calcuate t0 lazily, for each word store in the Least significant N words
-    //     (overwriting abs(a0-a1)). Since there are 2N words in t0, the last N words
-    //     are accumulated into the existing words of abs(t1)
-    // 5.  calculate t2 lazily, starting at the position 2N of the result and accumlating
-    //     into upper Nwords of abs(t1), then assigning into the MSW N words of result,
-    //     writing over the abs(b0-b1) that currently reside there.
+    // 4.  calcuate t0 lazily. Store the first N words of t0 in the first N words
+    //     of the result, and also accumulate into the second N of the result.
+    //     Accumulate the second N words of t0 into the second and third N
+    //     words of the result.
+    // 5.  calculate t2 lazily.  Accumulate first N words of t2 into the second and
+    //     third N words of result.  Accumlate the last N words of t2 into the third
+    //     N words of result, and assign to last N words of result (doing carrys as needed).
     // 
-    //     This algorithm assumes the existence of a Karatsuba generator.
+    //     This algorithm assumes the existence of a Karatsuba generator for t0 and t2.
     //     this means the multiply in step 3 is done by a generator,
     //     which is used in steps 4 and 5 for the accumulation.
     //     So, basically you have to be able to do a Karatsuba generator 
@@ -1313,7 +1313,7 @@ namespace Big_numbers {
   }
 
 
-
+#if 0
   // increment (in-place) by a value
   void Nat_mut::increment_by(const Nat_mut& rhs)
   {
@@ -1340,7 +1340,7 @@ namespace Big_numbers {
       num.d = result;
     }
   }
-
+#endif
 
 
 } // end namespace Big_numbers

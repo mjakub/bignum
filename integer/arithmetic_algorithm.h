@@ -290,6 +290,304 @@ namespace arithmetic_algorithm {
   };  // end class Sum_generator
 
 
+      // Product_generator(abegin, aend, bbegin, bend)
+      // represents product from multiplying the range abegin..aend and bbegin..bend
+      // The iterators abegin,aend only need be forward iterators.
+      // The iterators bbegin..bend need to be bidirectional iterators.
+      // The functions begin() and end() return a forward iterator to return
+      // the result from LSW to MSW.  If the result is zero, there is no MSW
+      // because begin()==end().  If the result is nonzero, the MSW is nonzero.
+      //
+  template < class Forward_iterator, class Bidir_iterator >
+  class Product_generator
+  {
+  public:
+    Product_generator(
+      const Forward_iterator& abegin, const Forward_iterator& aend,
+      const Bidir_iterator& bbegin, const Forward_iterator& bend)
+      : m_abegin(abegin)
+      , m_aend(aend)
+      , m_bbegin(bbegin)
+      , m_bend(bend)
+    {}
+
+    // This default constructor produces an instance with no meaning (until assigned).
+    Product_generator() {}
+
+    bool strongly_equal(const Product_generator& rhs) const  noexcept
+    {
+      return
+        (m_abegin == rhs.m_abegin)
+        && (m_aend == rhs.m_aend)
+        && (m_bbegin == rhs.m_bbegin)
+        && (m_bend == rhs.m_bend);
+    }
+
+    class iterator
+    {
+      using Uint128 = std::pair<uint64_t, uint64_t>;  // least and most significant 64 bits
+
+    private:
+
+      bool increment_internal_iterators() // returns true if done with convolutions
+      {
+        /* incrementing is tricky for convolution product.
+        the k-convolution is sum of a[i]*b[j] where i+j==k.
+        [astart,aend) [bstart,bend) are intervals for i and j, constrained to be the same length.
+
+        When k needs to increment
+        1) Try to increment the end of both intervals, preserving length equality (both lengths increase by 1).
+        2) if step 1 fails because one interval, call it foo, failed, while the other, call it bar, succeeded. Increment the start of bar to restore length equality.
+        3) If step 1 fails because both intervals could not expand, try to increment the start of both intervals (both lengths decrease by 1).
+        4) If try of step 3 fails (astart == aend), the intervals are empty and no increment is possible.
+        */
+        bool done_with_convolutions(false);
+        bool a_can_expand = (m_a_end_conv != parent.m_aend);
+        bool b_can_expand = (m_b_end_conv != parent.m_bend);
+        if (a_can_expand)
+        {
+          ++m_a_end_conv;   // lengths no longer equal, a-interval is one longer
+          if (b_can_expand)
+          {
+            ++m_b_end_conv;  // lengths equal
+          }
+          else
+          {
+            ++m_a_start_conv;   // lengths equal after restoring length of a-interval
+          }
+
+        }
+        else
+        {
+          // a-interval cannot expand
+          if (b_can_expand)
+          {
+            ++m_b_end_conv;  // lengths unequal, b-interval one larger
+            ++m_b_start_conv;      // lengths equal again
+          }
+          else
+          {
+            // neither can expand, try to shrink by incrementing the start
+            if (m_a_start_conv != m_a_end_conv)  //if the lengths are nonzero
+            {
+              ++m_a_start_conv;    // a-interval one shorter
+              ++m_b_start_conv;    // lengths equal again
+            }
+            else
+            {
+              done_with_convolutions = true;
+            }
+          }
+        }
+        return done_with_convolutions;
+      }
+
+
+    public:
+      struct End_tag_t {};
+
+      // default constructor has no meaning until copy-assigned
+      iterator()
+        : m_step(0u)
+        , m_accum(0)
+        , m_value(0)
+        , m_done(true)
+      {}
+
+      // make an end iterator
+      iterator(const Product_generator<Forward_iterator, Bidir_iterator>& the_parent, End_tag_t)
+        : parent(the_parent)
+        , m_a_start_conv(parent.m_aend)
+        , m_a_end_conv(m_a_start_conv)
+        , m_b_start_conv(parent.m_bend)
+        , m_b_end_conv(m_b_start_conv)
+        , m_step(1u)  // count the increments that increase the k in k-convolution
+        , m_accum(0u, 0u)
+        , m_value(0)
+        , m_done(true)
+      {
+      }
+
+      explicit iterator(const Product_generator<Forward_iterator, Bidir_iterator>& the_parent)
+        : parent(the_parent)
+        , m_a_start_conv(parent.m_abegin)
+        , m_a_end_conv(m_a_start_conv)
+        , m_b_start_conv(parent.m_bbegin)
+        , m_b_end_conv(m_b_start_conv)
+        , m_step(0u)
+        , m_accum(0u, 0u)
+        , m_value(0)
+        , m_done(true)
+      {
+        // if either multiplicand is 0, return 0.
+        if (m_a_start_conv == parent.m_aend)
+        {
+          return;
+        }
+
+        if (m_b_start_conv == parent.m_bend)
+        {
+          return;
+        }
+        ++m_a_end_conv;  // points 1 beyond m_a_start_conv
+        ++m_b_end_conv;  // points 1 begond m_b_start_conv
+
+                         // perform 1-convolutional product     
+        const uint64_t sum = m_accum.first + (uint64_t(*m_a_start_conv) * uint64_t(*m_b_start_conv));
+        m_accum.first = sum;
+
+        const uint64_t LSW_MASK(0xffff'ffffu);
+        m_value = uint32_t(sum & LSW_MASK);
+        // shift m_accum right 32 bits (divide by 2**32)
+        m_accum.first = (sum >> 32u);
+        m_done = false;
+        m_step += not increment_internal_iterators();  // keep track of the k in k-convolutions
+      } // end iterator constructor
+
+      iterator(const iterator& rhs)  // copy constructor
+        : parent(rhs.parent)
+        , m_a_start_conv(rhs.m_a_start_conv)
+        , m_a_end_conv(rhs.m_a_end_conv)
+        , m_b_start_conv(rhs.m_b_start_conv)
+        , m_b_end_conv(rhs.m_b_end_conv)
+        , m_step(0u)
+        , m_accum(rhs.m_accum)
+        , m_value(rhs.m_value)
+        , m_done(rhs.m_done)
+      {
+      }
+
+      bool operator==(const iterator& rhs) const  noexcept
+      {
+        bool are_equal(false);
+        if (m_done != rhs.m_done)
+        {
+          return are_equal;   // one is at end and other is not, unequal
+        }
+        are_equal = m_done ||    // both end iterators, so equal
+          (
+            parent.strongly_equal(rhs.parent)
+            && (m_a_start_conv == rhs.m_a_start_conv)
+            && (m_a_end_conv == rhs.m_a_end_conv)
+            && (m_b_start_conv == rhs.m_b_start_conv)
+            && (m_b_end_conv == rhs.m_b_end_conv)
+            && (m_accum == rhs.m_accum)
+            && (m_value == rhs.m_value));
+
+        return are_equal;
+      }
+
+      bool operator!=(const iterator& rhs) const noexcept
+      {
+        return !(*this == rhs);
+      }
+
+      const uint32_t & operator*() noexcept
+      {
+        return m_value;
+      }
+
+
+
+      //pre-increment
+      iterator& operator++() // this is noexcept if ++Forward_iterator is noexcept..  how to express?
+      {
+
+        if (m_done)
+        {
+          m_value = 0u;  // keep returning 0 on overflow
+          return *this; // ++ has no effect if done
+        }
+
+        // perform convolutional product     
+        std::reverse_iterator<Bidir_iterator> bp(m_b_end_conv);
+        Forward_iterator ap = m_a_start_conv;
+        while (ap != m_a_end_conv)
+        {
+          // add prod and acc, careful to detect carries
+          const uint64_t sum = m_accum.first + (uint64_t(*ap) * uint64_t(*bp));
+          //std::cout << "convolve2c sum " << acc.first << " + "  << (*ap) << " * " << (*bp) << " = " << sum << std::endl;
+          m_accum.second += (sum < m_accum.first);  // add 1 if overflow
+          m_accum.first = sum;
+
+          ++ap;
+          ++bp;
+        }
+        const uint64_t LSW_MASK(0xffff'ffffu);
+        m_value = uint32_t(m_accum.first & LSW_MASK);
+        // shift m_accum right 32 bits (divide by 2**32)
+        m_accum.first = (m_accum.first >> 32u) + ((m_accum.second & 0xFFFF'FFFFu) << 32u);
+        m_accum.second = (m_accum.second >> 32u);
+
+        const bool done_with_convolutions = increment_internal_iterators();
+        if (done_with_convolutions)
+        {
+          m_done = (m_accum.first == 0u) && (m_accum.second == 0u) && (m_value == 0u);
+        }
+        else
+        {
+          ++m_step; // keep track of the k in k-convolutions
+        }
+        return *this;
+      }
+
+      // post increment
+      iterator operator++(int)
+      {
+        iterator tmp(*this);
+        operator++();
+        return tmp;
+      }
+
+      using difference_type = ptrdiff_t;
+      using value_type = uint32_t;
+      using pointer = const uint32_t*;
+      using reference = const uint32_t&;   // so read-only
+      using iterator_category = std::forward_iterator_tag;
+
+
+    private:
+
+      const Product_generator& parent;
+      // Forward_iterator m_iter;
+      // can view m_a_start_conv as parent.m_abegin + ka, constrained by k = ka + kb,  where k in closed interval [0, asize + bsize -1]
+
+      typename Forward_iterator m_a_start_conv; // where k-convolution starts, parent.m_abegin + ka, constrained by k = ka+kb 
+      typename Forward_iterator m_a_end_conv; // where k-convolution ends, parent.m_abegin + k, constrained by k <= a_size 
+      typename Bidir_iterator m_b_start_conv;
+      typename Bidir_iterator m_b_end_conv; // where k-convolution ends, parent.m_bbegin + k, constrained by k <= b_size
+      size_t m_step;     // 0..a_size+b_size-1 the k of a k-convolution
+      Uint128 m_accum;
+      uint32_t m_value;
+      bool m_adone;
+      bool m_end_adone;
+      bool m_bdone;
+      bool m_end_bdone;
+      bool m_done;  // equivalent to (m_iter==m_end) && (m_accum==0) && (m_value==0)
+    };  // end class iterator of Product_generator
+
+
+    iterator begin() const
+    {
+      return iterator(*this);
+    }
+
+    iterator end() const
+    {
+      return iterator(*this, iterator::End_tag_t());
+    }
+
+
+
+  private:
+    const Forward_iterator& m_abegin;
+    const Forward_iterator& m_aend;
+    const Bidir_iterator& m_bbegin;
+    const Bidir_iterator& m_bend;
+
+  };  // end class Product_generator
+
+
   // class Product_by_word_generator
   // Represents a product, and returns the results
   // via iterator, rereferencing returns LSW first and MSw last.
@@ -959,304 +1257,6 @@ namespace arithmetic_algorithm {
       // else neither is end, and a<b or b<a, can determine using *fwd_iter_a < *fwd_iter_b
       // this algorithm will have to scan all of a or all of b to determine the longest.
 
-
-
-  // Product_generator(abegin, aend, bbegin, bend)
-  // represents product from multiplying the range abegin..aend and bbegin..bend
-  // The iterators abegin,aend only need be forward iterators.
-  // The iterators bbegin..bend need to be bidirectional iterators.
-  // The functions begin() and end() return a forward iterator to return
-  // the result from LSW to MSW.  If the result is zero, there is no MSW
-  // because begin()==end().  If the result is nonzero, the MSW is nonzero.
-  //
-  template < class Forward_iterator, class Bidir_iterator >
-  class Product_generator
-  {
-  public:
-    Product_generator(
-      const Forward_iterator& abegin, const Forward_iterator& aend,
-      const Bidir_iterator& bbegin, const Forward_iterator& bend)
-      : m_abegin(abegin)
-      , m_aend(aend)
-      , m_bbegin(bbegin)
-      , m_bend(bend)
-    {}
-
-    // This default constructor produces an instance with no meaning (until assigned).
-    Product_generator() {}
-
-    bool strongly_equal(const Product_generator& rhs) const  noexcept
-    {
-      return
-        (m_abegin == rhs.m_abegin)
-        && (m_aend == rhs.m_aend)
-        && (m_bbegin == rhs.m_bbegin)
-        && (m_bend == rhs.m_bend);
-    }
-
-    class iterator
-    {
-      using Uint128 = std::pair<uint64_t, uint64_t>;  // least and most significant 64 bits
-
-    private:
-
-      bool increment_internal_iterators() // returns true if done with convolutions
-      {
-        /* incrementing is tricky for convolution product.
-         the k-convolution is sum of a[i]*b[j] where i+j==k.
-         [astart,aend) [bstart,bend) are intervals for i and j, constrained to be the same length.
-         
-         When k needs to increment
-         1) Try to increment the end of both intervals, preserving length equality (both lengths increase by 1).
-         2) if step 1 fails because one interval, call it foo, failed, while the other, call it bar, succeeded. Increment the start of bar to restore length equality.
-         3) If step 1 fails because both intervals could not expand, try to increment the start of both intervals (both lengths decrease by 1).
-         4) If try of step 3 fails (astart == aend), the intervals are empty and no increment is possible.
-        */
-        bool done_with_convolutions(false);
-        bool a_can_expand = (m_a_end_conv != parent.m_aend);
-        bool b_can_expand = (m_b_end_conv != parent.m_bend);
-        if (a_can_expand)
-        {
-          ++m_a_end_conv;   // lengths no longer equal, a-interval is one longer
-          if (b_can_expand)
-          {
-            ++m_b_end_conv;  // lengths equal
-          }
-          else
-          {
-            ++m_a_start_conv;   // lengths equal after restoring length of a-interval
-          }
-
-        }
-        else
-        {
-          // a-interval cannot expand
-          if (b_can_expand)
-          {
-            ++m_b_end_conv;  // lengths unequal, b-interval one larger
-            ++m_b_start_conv;      // lengths equal again
-          }
-          else
-          {
-            // neither can expand, try to shrink by incrementing the start
-            if (m_a_start_conv != m_a_end_conv)  //if the lengths are nonzero
-            {
-              ++m_a_start_conv;    // a-interval one shorter
-              ++m_b_start_conv;    // lengths equal again
-            }
-            else
-            {
-              done_with_convolutions = true;
-            }
-          }
-        }
-        return done_with_convolutions;
-      }
-
-
-    public:
-      struct End_tag_t {};
-
-      // default constructor has no meaning until copy-assigned
-      iterator()
-        : m_step(0u)
-        , m_accum(0)
-        , m_value(0)
-        , m_done(true)
-      {}
-
-      // make an end iterator
-      iterator(const Product_generator<Forward_iterator, Bidir_iterator>& the_parent, End_tag_t)
-        : parent(the_parent)
-        , m_a_start_conv(parent.m_aend)
-        , m_a_end_conv(m_a_start_conv)
-        , m_b_start_conv(parent.m_bend)
-        , m_b_end_conv(m_b_start_conv)
-        , m_step(1u)  // count the increments that increase the k in k-convolution
-        , m_accum(0u,0u)
-        , m_value(0)
-        , m_done(true)
-      {
-      }
-
-      explicit iterator(const Product_generator<Forward_iterator, Bidir_iterator>& the_parent)
-        : parent(the_parent)
-        , m_a_start_conv(parent.m_abegin)
-        , m_a_end_conv(m_a_start_conv)
-        , m_b_start_conv(parent.m_bbegin)
-        , m_b_end_conv(m_b_start_conv)
-        , m_step(0u)
-        , m_accum(0u,0u)
-        , m_value(0)
-        , m_done(true)
-      {
-        // if either multiplicand is 0, return 0.
-        if (m_a_start_conv == parent.m_aend)
-        {
-          return;
-        }
-
-        if (m_b_start_conv == parent.m_bend)
-        {
-          return;
-        }
-        ++m_a_end_conv;  // points 1 beyond m_a_start_conv
-        ++m_b_end_conv;  // points 1 begond m_b_start_conv
-
-        // perform 1-convolutional product     
-        const uint64_t sum = m_accum.first + (uint64_t(*m_a_start_conv) * uint64_t(*m_b_start_conv));
-        m_accum.first = sum;
-
-        const uint64_t LSW_MASK(0xffff'ffffu);
-        m_value = uint32_t(sum & LSW_MASK);
-        // shift m_accum right 32 bits (divide by 2**32)
-        m_accum.first = (sum >> 32u);
-        m_done = false; 
-        m_step += not increment_internal_iterators();  // keep track of the k in k-convolutions
-      } // end iterator constructor
-
-      iterator(const iterator& rhs)  // copy constructor
-        : parent(rhs.parent)
-        , m_a_start_conv(rhs.m_a_start_conv)
-        , m_a_end_conv(rhs.m_a_end_conv)
-        , m_b_start_conv(rhs.m_b_start_conv)
-        , m_b_end_conv(rhs.m_b_end_conv)
-        , m_step(0u)
-        , m_accum(rhs.m_accum)
-        , m_value(rhs.m_value)
-        , m_done(rhs.m_done)
-      {
-      }
-
-      bool operator==(const iterator& rhs) const  noexcept
-      {
-        bool are_equal(false);
-        if (m_done != rhs.m_done)
-        {
-          return are_equal;   // one is at end and other is not, unequal
-        }
-        are_equal = m_done ||    // both end iterators, so equal
-          (
-            parent.strongly_equal(rhs.parent)
-            && (m_a_start_conv == rhs.m_a_start_conv)
-            && (m_a_end_conv == rhs.m_a_end_conv)
-            && (m_b_start_conv == rhs.m_b_start_conv)
-            && (m_b_end_conv == rhs.m_b_end_conv)
-            && (m_accum == rhs.m_accum)
-            && (m_value == rhs.m_value));
-
-        return are_equal;
-      }
-
-      bool operator!=(const iterator& rhs) const noexcept
-      {
-        return !(*this == rhs);
-      }
-
-      const uint32_t & operator*() noexcept
-      {
-        return m_value;
-      }
-
-
-
-      //pre-increment
-      iterator& operator++() // this is noexcept if ++Forward_iterator is noexcept..  how to express?
-      {
-
-        if (m_done)
-        {
-          m_value = 0u;  // keep returning 0 on overflow
-          return *this; // ++ has no effect if done
-        }
-
-        // perform convolutional product     
-        std::reverse_iterator<Bidir_iterator> bp(m_b_end_conv);
-        Forward_iterator ap = m_a_start_conv;
-        while (ap != m_a_end_conv)
-        {
-          // add prod and acc, careful to detect carries
-          const uint64_t sum = m_accum.first + (uint64_t(*ap) * uint64_t(*bp));
-          //std::cout << "convolve2c sum " << acc.first << " + "  << (*ap) << " * " << (*bp) << " = " << sum << std::endl;
-          m_accum.second += (sum < m_accum.first);  // add 1 if overflow
-          m_accum.first = sum;
-
-          ++ap;
-          ++bp;
-        }
-        const uint64_t LSW_MASK(0xffff'ffffu);
-        m_value = uint32_t(m_accum.first & LSW_MASK);
-        // shift m_accum right 32 bits (divide by 2**32)
-        m_accum.first = (m_accum.first >> 32u) + ((m_accum.second & 0xFFFF'FFFFu) << 32u);
-        m_accum.second = (m_accum.second >> 32u);
-
-        const bool done_with_convolutions = increment_internal_iterators();
-        if (done_with_convolutions)
-        {
-          m_done = (m_accum.first == 0u) && (m_accum.second == 0u) && (m_value == 0u);
-        }
-        else
-        {
-          ++m_step; // keep track of the k in k-convolutions
-        }
-        return *this;
-      }
-
-      // post increment
-      iterator operator++(int)
-      {
-        iterator tmp(*this);
-        operator++();
-        return tmp;
-      }
-
-      using difference_type = ptrdiff_t;
-      using value_type = uint32_t;
-      using pointer = const uint32_t*;
-      using reference = const uint32_t&;   // so read-only
-      using iterator_category = std::forward_iterator_tag;
-
-
-    private:
-      
-      const Product_generator& parent;
-      // Forward_iterator m_iter;
-      // can view m_a_start_conv as parent.m_abegin + ka, constrained by k = ka + kb,  where k in closed interval [0, asize + bsize -1]
- 
-      typename Forward_iterator m_a_start_conv; // where k-convolution starts, parent.m_abegin + ka, constrained by k = ka+kb 
-      typename Forward_iterator m_a_end_conv; // where k-convolution ends, parent.m_abegin + k, constrained by k <= a_size 
-      typename Bidir_iterator m_b_start_conv;
-      typename Bidir_iterator m_b_end_conv; // where k-convolution ends, parent.m_bbegin + k, constrained by k <= b_size
-      size_t m_step;     // 0..a_size+b_size-1 the k of a k-convolution
-      Uint128 m_accum;
-      uint32_t m_value;
-      bool m_adone;
-      bool m_end_adone;
-      bool m_bdone;
-      bool m_end_bdone;
-      bool m_done;  // equivalent to (m_iter==m_end) && (m_accum==0) && (m_value==0)
-    };  // end class iterator of Product_generator
-
-
-    iterator begin() const
-    {
-      return iterator(*this);
-    }
-
-    iterator end() const
-    {
-      return iterator(*this, iterator::End_tag_t());
-    }
-
-
-
-  private:
-    const Forward_iterator& m_abegin;
-    const Forward_iterator& m_aend;
-    const Bidir_iterator& m_bbegin;
-    const Bidir_iterator& m_bend;
-
-  };  // end class Product_generator
 
 
 
